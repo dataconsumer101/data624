@@ -1,0 +1,231 @@
+---
+title: "Data624 HW Week 1"
+author: "Leo Yi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    number_sections: no
+    theme: paper
+    highlight: tango
+    font-family: Consolas
+  pdf_document:
+    toc: yes
+---
+
+```{=html}
+<style type="text/css">
+
+code {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+pre {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+mark {
+  background-color: whitesmoke;
+  color: black;
+}
+
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 3.5)
+
+library(fpp2)
+library(seasonal)
+```
+
+<font size="5">Time Series and Decomposition</font>
+
+### 2.1
+
+Use the help function to explore what the series <mark> gold </mark>, <mark> woolyrnq </mark> and <mark> gas </mark> represent
+
+```{r}
+# ?gold
+# ?woolyrnq
+# ?gas
+```
+
+#### a - autoplot
+
+Use <mark> autoplot() </mark> to plot each of these in separate plots.
+
+```{r}
+autoplot(gold)
+autoplot(woolyrnq)
+autoplot(gas)
+```
+
+#### b - frequency
+
+What is the frequency of each series? Hint: apply the <mark> frequency() </mark> function.
+
+```{r}
+frequency(gold)
+frequency(woolyrnq)
+frequency(gas)
+```
+
+#### c - outlier
+
+Use <mark> which.max() </mark> to spot the outlier in the <mark> gold </mark> series. Which observation was it?
+
+```{r}
+max_val_time <- which.max(gold)
+max_val <- gold[max_val_time]
+
+cat('At time', max_val_time, 'the max value was', max_val)
+```
+
+---
+
+### 2.3
+
+Download some monthly Australian retail data from [the book website](https://otexts.com/fpp2/extrafiles/retail.xlsx). These represent retail sales in various categories for different Australian state, and are stored in a MS-Excel File.
+
+#### a - Import
+
+You can read the data into R with the following script:
+  
+    retaildata <- readxl::read_excel("retail.xlsx", skip = 1) 
+    
+The second argument ( **skip=1** ) is required becasue the Excel sheet has two header rows.
+    
+```{r}    
+path <- 'C:/Downloads/docs/data624/week1/'
+filename <- 'retail.xlsx'
+filepath <- paste0(path, filename)
+
+retaildata <- readxl::read_excel(filepath, skip = 1)
+```
+  
+#### b - Select Time Series
+
+Select one of the time series as follows (but replace the column name with your own chosen column):
+  
+    myts <- ts(retaildata[,"A3349873A"],
+      frequency=12, start=c(1982,4))
+      
+```{r}
+myts <- ts(retaildata[,101], frequency=12, start=c(1982,4))
+```
+
+#### c - Explore Time Series
+
+Explore your chosen retail time series using athe following functions:
+  
+    autoplot(), ggseasonplot(), ggsubseriesplot(), gglagplot(), ggAcf()
+    
+Can you spot any seasonality, cyclicity and trend? What do you learn about the series?
+
+```{r}
+autoplot(myts)
+```
+
+There seems to be clear seasonality and an upward trend, as well as a possible cycle that starts around 2010.
+
+```{r}
+ggseasonplot(myts)
+```
+
+Here, the seasonality is very apparent, with retail sales peaking in December, likely due to holiday sales.
+
+```{r}
+ggsubseriesplot(myts)
+```
+
+Again, December is clearly a leader in sales compared to other months. Each month over the years follows a trending pattern with growth in the beginning, leveling off, and then another period of growth.
+
+```{r, fig.height = 8}
+gglagplot(myts)
+```
+
+Here, we see almost all months showing a positive correlations, with lag 12 having the strongest association. 
+
+```{r}
+ggAcf(myts)
+```
+
+The autocorrelation chart here shows peaks every 12 months pointing at the seasonality of December sales, as well as significant associate of sales for neighboring periods.
+
+---
+
+### 6.2
+
+The <mark>plastics</mark> data set consists of monthly sales (in thousands) of product A for a plastics manufacturer for five years.
+
+#### a - plot time series
+
+Plot the time series of sales of Product A. Can you identify seasonal fluctuations and/or a trend-cycle?
+
+```{r}
+autoplot(plastics)
+```
+
+There seems to be an upward trend over the 5 year period, as well as a seasonal high just after halfway through each year.
+
+#### b - classical multiplicative decomposition
+
+Use a classical multiplicative decomposition to calculate the trend-cycle and seasonal indices.
+
+```{r, fig.height = 7}
+plastic_m_decomposed <- decompose(plastics, type = 'multiplicative')
+
+autoplot(plastic_m_decomposed)
+
+# plastics %>%
+#   decompose(type = 'multiplicative') %>%
+#   autoplot()
+```
+
+#### c - plot evaluation
+
+Do the results support the graphical interpretation from part a?
+
+  - It looks like we can see the upward trend mentioned earlier, but it also looks like the trend stops at the end of the 5 year period
+  - The seasonality is clearer in the decomposition, appearing to be waves that dip around the start of January and tops out around July/August.
+
+#### d - seasonally adjusted data
+
+Compute and plot the seasonally adjusted data.
+
+```{r}
+plastics_s_adj <- plastics / plastic_m_decomposed$seasonal
+
+autoplot(plastics_s_adj) +
+  ggtitle('Plastic Sales, Seasonally Adjusted') +
+  ylab('Sales')
+```
+
+#### e - introduction of outlier
+
+Change one observation to be an outlier (e.g., add 500 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+
+```{r}
+plastics[14]
+
+(plastics[14] <- plastics[14] + 500)
+
+(plastics / decompose(plastics, type = 'multiplicative')$seasonal) %>%
+  autoplot
+
+```
+
+Inflating record 14, which is two months after the first year, and recalculating the seasonally adjusted data shows a clear outlier when visualized in a plot.
+
+#### f - timing consideration
+
+Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+
+  - There would be a difference at the ends since we have less data to calculate trends and seasonality.
+
+
