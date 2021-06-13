@@ -1,0 +1,299 @@
+---
+title: "Data624 HW Week 2"
+author: "Leo Yi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    number_sections: no
+    theme: paper
+    highlight: tango
+    font-family: Consolas
+  pdf_document:
+    toc: yes
+---
+
+```{=html}
+<style type="text/css">
+
+code {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+pre {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+mark {
+  background-color: whitesmoke;
+  color: black;
+}
+
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.height = 5)
+
+library(mlbench)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(corrplot)
+library(GGally)
+library(e1071)
+library(VIM)
+library(caret)
+
+library(fpp2)
+# library(seasonal)
+```
+
+<font size="5">Data Pre-Processing and Exponential Smoothing</font>
+
+### KJ 3.1
+
+The UC Irvine Machine Learing Repository contains a data set related to glass identification. The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe.
+
+```{r}
+data(Glass)
+str(Glass)
+```
+
+#### a
+
+Using visualizations, explore the predictor variables to understand their distributions as well as the relationships between predictors.
+
+```{r}
+# Distribution of variables - histogram
+Glass[,1:9] %>%
+  gather(var, val) %>%
+  ggplot(aes(x = val)) +
+  geom_histogram() +
+  facet_wrap(~var, scales = 'free')
+```
+
+```{r}
+# Distribution of variables - probability density
+Glass[,1:9] %>%
+  gather(var, val) %>%
+  ggplot(aes(x = val)) +
+  geom_density() +
+  facet_wrap(~var, scales = 'free')
+```
+
+```{r}
+correlations <- cor(Glass[,1:9])
+corrplot(correlations, order = 'hclust')
+```
+
+```{r}
+ggpairs(Glass[,1:9])
+```
+
+#### b
+
+Do there appear to be any outliers in the data? Are any predictors skewed?
+
+```{r}
+# Distribution of variables - boxplot
+Glass[,1:9] %>%
+  gather(var, val) %>%
+  ggplot(aes(x = val)) +
+  geom_boxplot() +
+  facet_wrap(~var, scales = 'free')
+```
+
+  - Looking at the different distribution plots, we can see outliers.
+
+```{r}
+# skew
+apply(Glass[,1:9], 2, skewness)
+```
+
+  - It looks like all variables have some skew, with K showing the most and Na showing the least.
+
+#### c
+
+Are there any relevant transformations of one or more predictors that might improve the classification model?
+
+  - We can perform box cox transformations on each of the predictors to solve for skew.
+  - We can also scale each variable in order to resolve outliers.
+
+---
+
+### KJ 3.2
+
+The soybean data can be also found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes.
+
+```{r}
+data(Soybean)
+str(Soybean)
+```
+
+#### a
+
+Investigate the freqeuncy distributions for the categorical predictors. Are any of the distributions degenerate in the ways discussed earlier in this chapter?
+    
+```{r, fig.height=7}
+# exclude response variable
+beans <- Soybean[,2:ncol(Soybean)]
+
+# frequency distributions by variable
+beans %>%
+  gather(var, level) %>%
+  ggplot(aes(x = level)) +
+  geom_bar() + 
+  facet_wrap(~var, scales = 'free')
+```
+
+  - It looks like the following variables show mostly one level: int discolor, leaf.malf, leaf.mild, mycelium, and sclerotia
+  
+#### b
+
+Roughly 18% of the data are missing. Are there particula predictors that are more likely to be missing? Is the pattern of missing data related to the classes?
+      
+```{r}
+VIM::aggr(beans, col=c('green','red'), numbers=T, sortVars=T,
+          cex.axis = .7,
+          ylab=c("Proportion of Data", "Combinations and Percentiles"))
+
+
+```
+
+```{r}
+# count missing values for each Class
+Soybean %>%
+  group_by(Class) %>% 
+  summarise_all(~sum(is.na(.))) %>% 
+  transmute(Class, sumNA = rowSums(.[-1]))
+```
+
+```{r}
+# heatmap showing missing values for each class
+Soybean %>%
+  gather(var, level, -Class) %>%
+  group_by(Class, var) %>%
+  summarize(na_count = sum(is.na(level)),
+            row_count = n(),
+            pct_null = na_count / row_count) %>%
+  ggplot(aes(x = Class, y = var, fill = pct_null)) +
+  geom_tile() +
+  scale_fill_gradient(low = 'white', high = 'red3') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+#### c
+
+Develop a strategy for handing missing data, either by eliminating predictors or imputation.
+
+```{r, fig.height=6}
+# total null values
+sum(is.na(Soybean))
+
+# exclude near zero variance predictors
+nzv <- nearZeroVar(Soybean)
+beans2 <- Soybean[,-nzv]
+
+# still need to work through each field and impute -- was looking for a function like preProcess, but that doesn't work for categorical fields
+  
+
+
+
+```
+
+---
+
+### HA 7.1
+
+Consider the <mark> pigs </mark> series - the number of pigs slaughtered in Victoria each month.
+
+```{r, fig.height = 3.5}
+autoplot(fma::pigs)
+```
+
+#### a
+
+Use the <mark> ses() </mark> function in R to find the optimal values of $\alpha$ and $\ell_0$, and generate forecasts for the next four months.
+
+```{r}
+fc <- ses(fma::pigs, h = 4)
+
+autoplot(fc) +
+  autolayer(fitted(fc), series='Fitted') +
+  xlab('Year') +
+  ylab('Number of Pigs Slaughtered')
+```
+
+#### b
+
+Compute a 95% prediction interval for the first forecast using $\hat{y} \pm 1.96s$ where $s$ is the standard deviation of the residuals. Compare your interval with the interval produced by R.
+
+```{r}
+fc$model
+
+pi <- 1.96 * sd(fc$model$residuals)
+
+calc_upper <- fc$mean + pi
+calc_lower <- fc$mean - pi
+
+autoplot(fc) +
+  autolayer(calc_upper, color = 'red') +
+  autolayer(calc_lower, color = 'red')
+```
+
+### HA 7.2
+
+Write your own function to implement simple exponential smoothing. The function should take arguments <mark> y </mark> (the time series), <mark> alpha </mark> (the smoothing parameter $\alpha$) and <mark> level </mark> (the initial level $\ell_0$). It should return the forecast of the next observation in the series. Does it give the same forecast as <mark> ses() </mark>?
+
+```{r}
+# Function to calculate SES
+calc_ses <- function(y, a, l) {
+  
+  # convert time series into dataframe
+  temp_ts <- y %>%
+    data.frame()
+  
+  # name column 'val'
+  colnames(temp_ts) <- 'val'
+  
+  # add row index as a field
+  temp_ts$row_num <- rownames(temp_ts) %>%
+    as.numeric()
+  
+  # calculate relative number field
+  temp_ts$num <- nrow(temp_ts) - temp_ts$row_num
+  
+  # calculate weights
+  temp_ts$weight <- a * (1 - a) ^ temp_ts$num
+  
+  # filter for start
+  temp_ts <- temp_ts %>%
+    filter(row_num >= l)
+  
+  # calculate next
+  pred <- with(temp_ts, sum(val * weight))
+  
+  rm(temp_ts)
+  
+  return(pred)
+}
+
+function_check <- calc_ses(fma::pigs, 0.2, 1)
+
+function_check
+
+fc$fitted[1]
+```
+
+### HA 7.3
+
+Modify your function from the previous exercise to return the sum of squared errors rather than the forecast of the next observation. Then use the <mark> optim() </mark> function to find the optimal values of $\alpha$ and $\ell_0$. Do you get the same values as the <mark> ses() </mark> function?
+
+```{r}
+
+```
