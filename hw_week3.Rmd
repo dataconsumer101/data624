@@ -1,0 +1,313 @@
+---
+title: "Data624 HW Week 3"
+author: "Leo Yi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    number_sections: no
+    theme: paper
+    highlight: tango
+    font-family: Consolas
+  pdf_document:
+    toc: yes
+---
+
+```{=html}
+<style type="text/css">
+
+code {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+pre {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+mark {
+  background-color: whitesmoke;
+  color: black;
+}
+
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.height=3.5)
+
+options(scipen = 9)
+set.seed(101)
+
+library(fpp2)
+
+# library(mlbench)
+# library(ggplot2)
+# library(tidyr)
+# library(dplyr)
+# library(corrplot)
+# library(GGally)
+# library(e1071)
+# library(VIM)
+# library(caret)
+
+
+# library(seasonal)
+```
+
+<font size="5">Data Pre-Processing and Exponential Smoothing</font>
+
+### HA 8.1
+
+Figure 8.31 shows the ACFs for 36 random numbers, 360 random numbers and 1,000 random numbers.
+
+#### a
+
+Explain the differences among these figures. DO they all indicate that the data are white noise?
+
+- Each series ACF plots show autocorrelation between different periods in black, with blue dotted lines representing the boundary for significance. As the number of data points increases, both the levels of autocorrelation and significance narrow because we have more evidence that the data is random.
+
+#### b
+
+Why are the critical values at different distances from the mean of zero? Why are the autocorrelations different in each figure when they each refer to white noise?
+
+- As we process more data points of random points, there's less chance of finding random autocorrelations. Since the data is truly random, as we get more data we learn that there's no relationship between one data point and the past. It's all white noise. The few autocorrelations that reach the critical point are likely just doing so by pure chance.
+
+---
+
+### HA 8.2
+
+A classic example of a non-stationary series is the daily closing IBM stock price series (data set <mark> ibmclose </mark>). Use R to plot the daily closing prices for IBM stock and the ACF and PACF. Explain how each plot shows that the series is non-stationary and should be differenced.
+
+```{r, fig.height = 7}
+ibmclose %>%
+  ggtsdisplay()
+```
+
+For a non-stationary plot, we're looking for a time series plot to be both random and vary within a set range. In the plots above, we're seeing clear autocorrelation across >25 lagging periods and a significant correlation to the t-1 value.
+
+---
+
+### HA 8.6
+
+Use R to simulate and plot some data from simple ARIMA models.
+
+#### a
+
+Use the following R code to generate data from an AR(1) model with $\phi_1$ = 0.6 and $\sigma^2$ = 1. The process starts with $y_1$ = 0.
+
+```{r}
+y <- ts(numeric(100))
+e <- rnorm(100)
+for(i in 2:100)
+  y[i] <- 0.6 * y[i-1] + e[i]
+```
+
+#### b
+
+Produce a time plot for the series. How does the plot change as you change $\phi_1$?
+
+```{r}
+# function to plot AR(1) model given phi
+plot_ar <- function(phi) {
+  
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100)
+    y[i] <- phi * y[i-1] + e[i]
+  
+  autoplot(y) +
+    ggtitle(paste0('AR(1), p = ', phi))
+}
+
+# phi = -2
+plot_ar(-2)
+
+# phi = -1
+plot_ar(-1)
+
+# phi = -0.5
+plot_ar(-0.5)
+
+# phi = 0
+plot_ar(0)
+
+# phi = 0.5
+plot_ar(0.5)
+
+# phi = 1
+plot_ar(1)
+
+# phi = 2
+plot_ar(2)
+```
+
+#### c
+
+Write your own code to generate data from an MA(1) model with $\theta_1$ = 0.6 and $\sigma^2$ = 1.
+
+```{r}
+plot_ma <- function(theta) {
+  
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100)
+    y[i] <- e[i] + theta * e[i-1]
+  
+  autoplot(y) +
+    ggtitle(paste0('MA(1), theta = ', theta))
+}
+```
+
+#### d 
+
+Produce a time plot for the series. How does the plot change as you change $\theta_1$?
+
+```{r}
+plot_ma(0.6)
+
+# theta = -2
+plot_ma(-2)
+
+# theta = -1
+plot_ma(-1)
+
+# theta = -0.5
+plot_ma(-0.5)
+
+# theta = 0
+plot_ma(0)
+
+# theta = 0.5
+plot_ma(0.5)
+
+# theta = 1
+plot_ma(1)
+
+# theta = 2
+plot_ma(2)
+```
+
+#### e
+
+Generate data from an ARMA(1,1) model with $\phi_1$ = 0.6, $\theta_1$ = 0.6 and $\sigma^2$  = 1.
+
+```{r}
+plot_arma <- function(phi, theta) {
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 2:100)
+    y[i] <- phi * y[i-1] + e[i] + theta * e[i-1]
+  
+  autoplot(y) +
+    ggtitle(paste0('ARMA(1,1), p = ', phi, ' theta = ', theta))
+}
+
+plot_arma(0.6,0.6)
+```
+
+#### f
+
+Generate data from an AR(2) model with $\phi_1$ = -0.8, $\phi_2$ = 0.3 and $\sigma^2$ = 1. (Note that these parameters will give a non-stationary series.)
+
+```{r}
+plot_ar2 <- function(p, p2) {
+  y <- ts(numeric(100))
+  e <- rnorm(100)
+  for(i in 3:100)
+    y[i] <- p * y[i-1] + e[i] + p2 * y[i-2]
+  
+  autoplot(y) +
+    ggtitle(paste0('AR(2), p = ', p, ' phi_2 = ', p2))
+}
+
+plot_ar2(-0.8,0.3)
+```
+
+
+#### g
+
+Graph the latter two series and compare them.
+
+---
+
+### HA 8.8
+
+Consider <mark> austa </mark>, the total international visitors to Austrailia (in millions) for the period 1980-2015.
+
+```{r}
+autoplot(austa)
+```
+
+#### a
+
+Use <mark> auto.arima() </mark> to find an appropriate ARIMA model. What model was selected. Check that the residuals look like white noise. Plot forecasts for the next 10 periods.
+
+```{r}
+(fit <- auto.arima(austa))
+```
+
+```{r, fig.height=7}
+checkresiduals(fit)
+```
+
+```{r}
+fit %>%
+  forecast(h=10) %>%
+  autoplot()
+```
+
+#### b
+
+Plot forecasts from an ARIMA(0,1,1) model with no drift and compare these to part a. Remove the MA term and plot again.
+
+```{r}
+Arima(austa, order = c(0,1,1), include.drift = F) %>%
+  forecast(h=10) %>%
+  autoplot()
+
+Arima(austa, order = c(0,1,1), include.drift = F, include.mean = F) %>%
+  forecast(h=10) %>%
+  autoplot()
+```
+
+#### c
+
+Plot forecasts from an ARIMA(2,1,3) model with drift. Remove the constant and see what happens.
+
+```{r}
+Arima(austa, order = c(2,1,3), include.drift = T) %>%
+  forecast(h=10) %>%
+  autoplot()
+
+# Arima(austa, order = c(2,1,3), include.drift = T, include.constant = F) %>%
+#   forecast(h=10) %>%
+#   autoplot()
+```
+
+#### d
+
+Plot forecasts from an ARIMA(0,0,1) model with a constant. Remove the MA term and plot again.
+
+```{r}
+Arima(austa, order = c(0,0,1), include.constant = T) %>%
+  forecast(h=10) %>%
+  autoplot()
+
+Arima(austa, order = c(0,0,1), include.constant = T, include.mean = F) %>%
+  forecast(h=10) %>%
+  autoplot()
+```
+
+#### e
+
+Plot forecasts from an ARIMA(0,2,1) model with no constant.
+
+```{r}
+Arima(austa, order = c(0,2,1), include.constant = T) %>%
+  forecast(h=10) %>%
+  autoplot()
+```
