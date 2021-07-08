@@ -1,0 +1,169 @@
+---
+title: "Data624 HW Week 4"
+author: "Leo Yi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+    number_sections: no
+    theme: paper
+    highlight: tango
+    font-family: Consolas
+  pdf_document:
+    toc: yes
+---
+
+```{=html}
+<style type="text/css">
+
+code {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+pre {
+  font-family: "Consolas";
+  font-size: 11px;
+}
+
+mark {
+  background-color: whitesmoke;
+  color: black;
+}
+
+</style>
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.height=3.5)
+
+options(scipen = 9)
+set.seed(101)
+
+library(arules)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+```
+
+<font size="5">Recommender Systems</font>
+
+### Market Basket Analysis
+
+```{r}
+# import data
+df <- read.csv('https://raw.githubusercontent.com/dataconsumer101/data624/main/GroceryDataSet.csv', header = F, na.strings=c(""))
+
+# convert column names to lowercase
+names(df) <- lapply(names(df), tolower)
+
+# add row index as new field
+df$row <- row.names(df) %>%
+  as.numeric()
+
+# quick look at what the data looks like
+head(df)[1:4]
+```
+
+#### Exploratory Data Analysis
+
+```{r}
+# df long for plots
+df2 <- df %>%
+  gather(item_num, item, -row) %>%
+  filter(!is.na(item)) %>%
+  mutate(item_num = substr(item_num, 2, nchar(item_num))) %>%
+  mutate(item_num = as.numeric(item_num))
+```
+
+```{r, fig.height=14}
+# plot item purchase frequency
+df2 %>%
+  group_by(item) %>%
+  summarize(purchases = n()) %>%
+  ggplot(aes(x = reorder(item, purchases), y = purchases)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = 'Ranked Item Purchases',
+       x = 'Item',
+       y = 'Purchase Count') +
+  theme(axis.text.y = element_text(size = 6))
+```
+
+
+```{r}
+df2 %>%
+  group_by(row) %>%
+  summarize(basket_size = max(item_num)) %>%
+  ggplot(aes(x = basket_size)) +
+  geom_histogram() +
+  labs(title = 'Distribution of Basket Sizes',
+       x = 'Basket Size',
+       y = element_blank())
+```
+
+```{r}
+fi <- df %>%
+  select(-row) %>%
+  apriori(parameter = list(minlen=3, supp=2/9, conf=0.1))
+  # eclat(parameter = list(supp = 0.07, maxlen = 15))
+
+inspect(fi)
+```
+
+```{r}
+library(arules)
+library(pander)
+library(arulesViz)
+
+tx <- read.transactions('https://raw.githubusercontent.com/dataconsumer101/data624/main/GroceryDataSet.csv', sep = ",", format = "basket")
+
+summary(tx)
+
+itemFrequencyPlot(tx, topN = 20, main = 'Top 20 items purchased')
+
+crossTable(tx, measure = 'support', sort = T)[1:5, 1:5] %>%
+  pander(split.table = Inf, round = 3)
+
+rules <- apriori(tx, control = list(verbose = F), parameter = list(support = 0.001, confidence = 0.25, minlen = 2))
+
+rules_toplift <- sort(rules, by = 'lift', decreasing = T)[1:10]
+
+inspect(rules_toplift)
+
+rules_top_supp <- sort(rules, by = 'support', decreasing = T)[1:10]
+
+inspect(rules_top_supp)
+
+rules_soda_1 <- apriori(tx, 
+                        control = list(verbose = F),
+                        parameter = list(support = 0.001, confidence = 0.15, minlen = 2, target = 'rules'),
+                        appearance = list(default = 'rhs', lhs = 'soda')
+                        )
+
+plot(rules_soda_1, method = 'graph', interactive = F, shading = NA)
+
+rules_soda_r <- apriori(tx,
+                        control = list(verbose = F),
+                        parameter = list(support = 0.001, confidence = 0.5, minlen = 2, target = 'rules'),
+                        appearance = list(default = 'lhs', rhs = 'soda')
+                        )
+
+inspect(sort(rules_soda_r, by = 'support', decreasing = T)[1:10])
+
+plot(rules_soda_r, method = 'graph', interactive = F, shading = NA)
+```
+
+
+
+
+
+
+
+
+
+
+
+
