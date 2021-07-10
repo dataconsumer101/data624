@@ -37,12 +37,14 @@ mark {
 ```
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.height=3.5)
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F)
 
 options(scipen = 9)
 set.seed(101)
 
 library(arules)
+library(arulesViz)
+
 library(tidyr)
 library(dplyr)
 library(ggplot2)
@@ -54,7 +56,8 @@ library(ggplot2)
 
 ```{r}
 # import data
-df <- read.csv('https://raw.githubusercontent.com/dataconsumer101/data624/main/GroceryDataSet.csv', header = F, na.strings=c(""))
+url <- 'https://raw.githubusercontent.com/dataconsumer101/data624/main/GroceryDataSet.csv'
+df <- read.csv(url, header = F, na.strings=c(""))
 
 # convert column names to lowercase
 names(df) <- lapply(names(df), tolower)
@@ -93,7 +96,7 @@ df2 %>%
 ```
 
 
-```{r}
+```{r, fig.height = 3.5}
 df2 %>%
   group_by(row) %>%
   summarize(basket_size = max(item_num)) %>%
@@ -105,12 +108,112 @@ df2 %>%
 ```
 
 ```{r}
-fi <- df %>%
-  select(-row) %>%
-  apriori(parameter = list(minlen=3, supp=2/9, conf=0.1))
-  # eclat(parameter = list(supp = 0.07, maxlen = 15))
+tx <- read.transactions(url, sep = ",", format = "basket")
 
-inspect(fi)
+rules <- tx %>%
+  apriori(parameter = list(minlen = 2, 
+                           supp = 0.001, 
+                           conf = 0.1
+                           ),
+          control = list(verbose = F)
+          )
+```
+
+The rules above were created with low thresholds. Next we'll sort them and look at the top ranking associations by significance, confidence, and lift.
+
+```{r}
+top_signficance <- rules %>%
+  sort(by = 'support', decreasing = T)
+
+top_signficance[1:10] %>%
+  inspect()
+```
+Items ranked by the highest support are found together most often. We should also consider that each of the items individually have high coverage, so we're also looking at some of the most popular items. Looking at lift, we can see that all of the items on the right side are more likely to be bought when the items on the left side are purchased.
+
+```{r}
+top_confidence <- rules %>%
+  sort(by = 'confidence', decreasing = T)
+
+top_confidence[1:10] %>%
+  inspect()
+```
+When we rank by confidence, the top 10 rules using the low thresholds show combinations of items with a confidence of 1. The support level of these items is very low, appearing in approximately 0.1% of transactions. With the low support threshold, we're basically seeing a handful of item combinations that were always purchased with milk or other vegetables.
+
+Let's increase the support threshold and take another look.
+
+```{r}
+rules2 <- tx %>%
+  apriori(parameter = list(minlen = 2, 
+                           supp = 0.01, 
+                           conf = 0.1
+                           ),
+          control = list(verbose = F)
+          )
+
+top_confidence2 <- rules2 %>%
+  sort(by = 'confidence', decreasing = T)
+
+top_confidence2[1:10] %>%
+  inspect()
+```
+After increasing the support threshold to look at item combinations that were purchased in at least 1% of all transactions, we're seeing more popular item combinations that are purchased. The coverage of the left hand side is showing that these combinations were purchased together at least 1.7% of the time, and with just over 50% confidence and 2+ lift, we see that other vegetables and milk are likely to end up in someone's cart if they're purchasing the items on the left.
+
+```{r}
+top_lift <- rules %>%
+  sort(by = 'lift', decreasing = T)
+
+top_lift[1:10] %>%
+  inspect()
+```
+When we rank the top ten rules by lift, we're seeing the highest chance of items being purchased together. When someone buys bottled beer and wine, there's a very high likelihood that they will also purchase liquor. The same idea applies to the other associations -- if someone has the left hand side in their cart, they're very likely to also buy the tiems on the right hand side.
+
+```{r}
+# using support = 0.01, conf = 0.1
+rules2 %>%
+  plot(method = 'graph')
+```
+That's a lot of information. Let's try to adjust the support thresholds and plot again.
+
+```{r}
+# support = 0.02
+tx %>%
+  apriori(parameter = list(minlen = 2, 
+                           supp = 0.02,
+                           conf = 0.25
+                           ),
+          control = list(verbose = F)
+          ) %>%
+  plot(method = 'graph')
+
+# support = 0.03
+tx %>%
+  apriori(parameter = list(minlen = 2, 
+                           supp = 0.03,
+                           conf = 0.25
+                           ),
+          control = list(verbose = F)
+          ) %>%
+  plot(method = 'graph')
+
+# support = 0.04
+tx %>%
+  apriori(parameter = list(minlen = 2, 
+                           supp = 0.04,
+                           conf = 0.25
+                           ),
+          control = list(verbose = F)
+          ) %>%
+  plot(method = 'graph')
+
+# support = 0.05
+tx %>%
+  apriori(parameter = list(minlen = 2, 
+                           supp = 0.05,
+                           conf = 0.25
+                           ),
+          control = list(verbose = F)
+          ) %>%
+  plot(method = 'graph')
 ```
 
 ```{r}
